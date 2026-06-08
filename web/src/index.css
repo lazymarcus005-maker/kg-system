@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply box-border;
+}
+
+body {
+  @apply bg-graph-50 text-graph-900;
+}
+
+html {
+  @apply scroll-smooth;
+}

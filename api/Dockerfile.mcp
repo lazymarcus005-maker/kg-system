@@ -1,0 +1,10 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir fastapi uvicorn httpx sse-starlette pydantic-settings
+
+COPY mcp_server.py .
+COPY config.py .
+
+CMD ["uvicorn", "mcp_server:app", "--host", "0.0.0.0", "--port", "8002"]

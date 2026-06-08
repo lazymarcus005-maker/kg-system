@@ -1,0 +1,154 @@
+services:
+
+  # ── Graph Database ──────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.18-community
+    container_name: kg_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/changeme
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./scripts/neo4j-init.cypher:/docker-entrypoint-initdb.d/init.cypher
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "changeme", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── Vector Store (RAG fallback) ──────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    container_name: kg_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333' && echo OK"]
+      interval: 10s
+      timeout: 8s
+      retries: 10
+      start_period: 15s
+
+  # ── Ingestion Worker ─────────────────────────────────────────────
+  ingestion:
+    build:
+      context: ./ingestion
+      dockerfile: Dockerfile
+    container_name: kg_ingestion
+    restart: unless-stopped
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: changeme
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      # LLM Provider
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # Embedding Provider
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      # Ingestion config
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+      EXTRACT_ENTITIES: ${EXTRACT_ENTITIES:-true}
+    volumes:
+      - ./data/input:/app/input          # drop PDFs here
+      - ./data/processed:/app/processed
+    ports:
+      - "8001:8001"   # Ingestion API
+
+  # ── Query / GraphRAG API ─────────────────────────────────────────
+  query-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: kg_query_api
+    restart: unless-stopped
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: changeme
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      # LLM Provider
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # Embedding Provider
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      API_KEY: ${QUERY_API_KEY:-changeme}
+    ports:
+      - "8000:8000"   # Main API (OpenAI-compatible)
+
+  # ── MCP Server (for Claude Code / AI harness) ───────────────────
+  mcp-server:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.mcp
+    container_name: kg_mcp
+    restart: unless-stopped
+    depends_on:
+      - query-api
+    environment:
+      QUERY_API_URL: http://query-api:8000
+      API_KEY: ${QUERY_API_KEY:-changeme}
+    ports:
+      - "8002:8002"   # MCP SSE endpoint
+
+  # ── Web Control Panel ────────────────────────────────────────────
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: http://localhost:8000
+        VITE_INGEST_BASE: http://localhost:8001
+        VITE_MCP_BASE: http://localhost:8002
+        VITE_API_KEY: ${QUERY_API_KEY:-changeme}
+    container_name: kg_web
+    restart: unless-stopped
+    depends_on:
+      - query-api
+    ports:
+      - "5173:5173"   # Web UI
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  qdrant_data:
