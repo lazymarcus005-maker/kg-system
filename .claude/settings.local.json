@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /d D:\\\\Workspaces\\\\AIArea\\\\kg-system)",
+      "Bash(docker-compose build *)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s -X OPTIONS http://localhost:8000/health -H \"Origin: http://localhost:5173\" -i)"
+    ]
+  }
+}
