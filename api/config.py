@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     openrouter_api_key: str = ""
     openrouter_model: str = "openai/gpt-4o"
+    openai_compatible_api_key: str = ""
+    openai_compatible_base_url: str = ""
+    openai_compatible_model: str = ""
+    openai_compatible_embeddings_base_url: str = ""  # separate URL for embeddings (optional)
     ollama_base_url: str = "http://host.docker.internal:11434"
     ollama_model: str = "llama3.2"
 

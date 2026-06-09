@@ -1,18 +1,45 @@
 import { CheckCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../lib/api'
+import ingestionApi from '../lib/ingestionApi'
 import { useHealthStore } from '../store/healthStore'
 import type { HealthStatus } from '../lib/types'
 
+interface RuntimeConfig {
+  llm: {
+    provider: string
+    openai_compatible_base_url: string
+    openai_compatible_model: string
+    openai_compatible_api_key: string
+  }
+  embedding: {
+    provider: string
+    model: string
+    dimension: number
+  }
+}
+
 export default function Settings() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [config, setConfig] = useState<RuntimeConfig | null>(null)
   const { neo4j, provider } = useHealthStore()
 
   useEffect(() => {
     api.get<HealthStatus>('/health')
       .then(r => setHealth(r.data))
       .catch(() => {})
+    ingestionApi.get<RuntimeConfig>('/config')
+      .then(r => setConfig(r.data))
+      .catch(() => {})
   }, [])
+
+  const configRows = config ? [
+    { label: 'OPENAI_COMPATIBLE_API_KEY', value: config.llm.openai_compatible_api_key },
+    { label: 'OPENAI_COMPATIBLE_BASE_URL', value: config.llm.openai_compatible_base_url },
+    { label: 'OPENAI_COMPATIBLE_MODEL', value: config.llm.openai_compatible_model },
+    { label: 'EMBEDDING_PROVIDER', value: config.embedding.provider },
+    { label: 'EMBEDDING_MODEL', value: config.embedding.model },
+  ] : []
 
   return (
     <div className="p-8">
@@ -45,34 +72,18 @@ export default function Settings() {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-graph-900 mb-4">Configuration</h3>
           <p className="text-sm text-graph-500 mb-4">Settings are read-only and managed via environment variables.</p>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-graph-900 mb-1">LLM Provider</label>
-              <input
-                type="text"
-                value={provider || 'openai'}
-                disabled
-                className="w-full px-3 py-2 border border-graph-200 rounded-lg bg-graph-50 text-graph-600 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-graph-900 mb-1">Neo4j URI</label>
-              <input
-                type="text"
-                value="bolt://neo4j:7687"
-                disabled
-                className="w-full px-3 py-2 border border-graph-200 rounded-lg bg-graph-50 text-graph-600 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-graph-900 mb-1">Qdrant Host</label>
-              <input
-                type="text"
-                value="qdrant:6333"
-                disabled
-                className="w-full px-3 py-2 border border-graph-200 rounded-lg bg-graph-50 text-graph-600 text-sm"
-              />
-            </div>
+          <div className="space-y-3">
+            {configRows.map(({ label, value }) => (
+              <div key={label}>
+                <label className="block text-xs font-medium text-graph-500 mb-1">{label}</label>
+                <div className="w-full px-3 py-2 border border-graph-200 rounded-lg bg-graph-50 text-graph-700 text-sm font-mono break-all">
+                  {value}
+                </div>
+              </div>
+            ))}
+            {!config && (
+              <p className="text-sm text-graph-400 italic">Loading configuration…</p>
+            )}
           </div>
         </div>
 

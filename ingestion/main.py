@@ -139,3 +139,23 @@ async def watch_input_dir(background_tasks: BackgroundTasks):
 @app.get("/health")
 async def health():
     return {"status": "ok", "provider": settings.llm_provider}
+
+
+@app.get("/config")
+async def get_config():
+    """Return read-only runtime configuration (API keys are masked)."""
+    api_key = settings.openai_compatible_api_key
+    masked_key = (api_key[:8] + "..." + api_key[-4:]) if len(api_key) > 12 else "***"
+    return {
+        "llm": {
+            "provider": settings.llm_provider,
+            "openai_compatible_base_url": settings.openai_compatible_base_url,
+            "openai_compatible_model": settings.openai_compatible_model,
+            "openai_compatible_api_key": masked_key,
+        },
+        "embedding": {
+            "provider": settings.embedding_provider,
+            "model": settings.embedding_model,
+            "dimension": settings.embedding_dimension,
+        },
+    }

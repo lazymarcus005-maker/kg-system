@@ -19,7 +19,8 @@ langchain-qdrant>=0.2.0,<0.3.0
 
 # Embeddings
 openai>=1.35.7,<2.0.0
-sentence-transformers>=3.0.1
+# sentence-transformers only needed if EMBEDDING_PROVIDER=huggingface (pulls PyTorch — huge image)
+# sentence-transformers>=3.0.1
 
 # Utilities
 pydantic>=2.7.4,<3.0.0
