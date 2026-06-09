@@ -126,8 +126,40 @@ async def list_models():
         "data": [
             {"id": "kg-graphrag", "object": "model", "owned_by": "kg-system"},
             {"id": "kg-cypher", "object": "model", "owned_by": "kg-system"},
+            {"id": "bge-m3", "object": "model", "owned_by": "BAAI"},
+            {"id": settings.embedding_model if settings.embedding_model else "text-embedding-3-small", "object": "model", "owned_by": "embeddings"},
         ],
     }
+
+
+# ── /embeddings (OpenAI-compatible) ───────────────────────────────────
+class EmbeddingRequest(BaseModel):
+    model: str = ""
+    input: str | list[str]
+    encoding_format: str = "float"
+
+
+@app.post("/embeddings", dependencies=[Depends(verify_key)])
+async def embeddings(req: EmbeddingRequest):
+    """Generate embeddings — calls the gateway's /v1/embeddings endpoint directly."""
+    import httpx
+    inputs: list[str] = [req.input] if isinstance(req.input, str) else req.input
+
+    payload = {
+        "model": req.model or settings.embedding_model,
+        "input": inputs,
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"{settings.openai_compatible_base_url}/v1/embeddings",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {settings.openai_compatible_api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 # ── /query/cypher — NL→Cypher endpoint ───────────────────────────────
@@ -320,3 +352,69 @@ async def search_graph_nodes(
     """
     results = rag.graph.query(cypher, params={"search": search, "limit": limit})
     return {"results": results}
+
+
+class CreateNodeRequest(BaseModel):
+    name: str
+    label: str
+    description: str = ""
+
+
+@app.post("/graph/nodes", dependencies=[Depends(verify_key)], status_code=201)
+async def create_graph_node(body: CreateNodeRequest):
+    """Create a new entity node in the knowledge graph."""
+    # Sanitise label — alphanumeric + underscore only to prevent Cypher injection
+    import re
+    safe_label = re.sub(r"[^A-Za-z0-9_]", "_", body.label.strip())
+    if not safe_label:
+        raise HTTPException(400, "Invalid label")
+
+    cypher = f"""
+    MERGE (n:__Entity__:`{safe_label}` {{id: $name}})
+    ON CREATE SET n.name = $name, n.description = $description, n.created_at = timestamp()
+    ON MATCH  SET n.description = CASE WHEN $description <> '' THEN $description ELSE n.description END
+    RETURN elementId(n) AS id, coalesce(n.id, n.name) AS name, labels(n) AS labels,
+           n.description AS description
+    """
+    results = rag.graph.query(cypher, params={"name": body.name.strip(), "description": body.description.strip()})
+    if not results:
+        raise HTTPException(500, "Node creation failed")
+    return results[0]
+
+
+# ── Graph Visualization ────────────────────────────────────────────
+@app.get("/graph/visualization", dependencies=[Depends(verify_key)])
+async def get_graph_visualization(limit: int = Query(100, ge=10, le=500)):
+    """Get graph nodes and edges for visualization (limited to prevent browser overload)."""
+    # Fetch limited nodes and their direct relationships
+    cypher = """
+    MATCH (n:__Entity__)
+    WITH n LIMIT $limit
+    OPTIONAL MATCH (n)-[r]->(m:__Entity__)
+    WITH n, r, m, [x IN labels(n) WHERE x <> '__Entity__'][0] AS node_type
+    RETURN {
+      id: elementId(n),
+      name: coalesce(n.id, n.name),
+      type: coalesce(node_type, 'Unknown')
+    } AS node, 
+    {
+      source: elementId(n),
+      target: elementId(m),
+      relation: type(r)
+    } AS edge
+    """
+    
+    all_results = rag.graph.query(cypher, params={"limit": limit})
+    
+    nodes_dict = {}
+    edges = []
+    
+    for row in all_results:
+        if row.get("node"):
+            node_data = row["node"]
+            nodes_dict[node_data["id"]] = node_data
+        if row.get("edge") and row["edge"].get("target"):
+            edges.append(row["edge"])
+    
+    nodes = list(nodes_dict.values())
+    return {"nodes": nodes, "edges": edges, "total_nodes": len(nodes), "total_edges": len(edges)}

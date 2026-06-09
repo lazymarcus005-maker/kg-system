@@ -1,6 +1,6 @@
 """
 LLM + Embeddings factory.
-Supports: OpenAI, Anthropic (Claude), Google (Gemini), OpenRouter, Ollama (local).
+Supports: OpenAI, Anthropic (Claude), Google (Gemini), OpenRouter, OpenAI-Compatible, Ollama (local).
 Switch via LLM_PROVIDER env var — no code changes needed.
 """
 from config import Settings
@@ -43,6 +43,20 @@ def build_llm(settings: Settings):
             temperature=0,
         )
 
+    if provider == "openai_compatible":
+        if not settings.openai_compatible_api_key:
+            raise ValueError("OPENAI_COMPATIBLE_API_KEY required for openai_compatible provider")
+        if not settings.openai_compatible_base_url:
+            raise ValueError("OPENAI_COMPATIBLE_BASE_URL required for openai_compatible provider")
+        model = settings.openai_compatible_model or "qwen3.6-35b-a3b-fp8[1m]"
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=model,
+            api_key=settings.openai_compatible_api_key,
+            base_url=settings.openai_compatible_base_url,
+            temperature=0,
+        )
+
     if provider == "ollama":
         from langchain_ollama import ChatOllama
         return ChatOllama(
@@ -51,7 +65,7 @@ def build_llm(settings: Settings):
             temperature=0,
         )
 
-    raise ValueError(f"Unknown LLM_PROVIDER: {provider}. Use: openai|anthropic|google|openrouter|ollama")
+    raise ValueError(f"Unknown LLM_PROVIDER: {provider}. Use: openai|anthropic|google|openrouter|openai_compatible|ollama")
 
 
 def build_embeddings(settings: Settings):
@@ -82,6 +96,19 @@ def build_embeddings(settings: Settings):
             model_name=settings.embedding_model,
         )
 
+    if provider == "openai_compatible":
+        if not settings.openai_compatible_api_key:
+            raise ValueError("OPENAI_COMPATIBLE_API_KEY required for openai_compatible embedding provider")
+        base_url = (getattr(settings, 'openai_compatible_embeddings_base_url', None) or settings.openai_compatible_base_url)
+        if not base_url:
+            raise ValueError("OPENAI_COMPATIBLE_BASE_URL or OPENAI_COMPATIBLE_EMBEDDINGS_BASE_URL required for openai_compatible embedding provider")
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(
+            model=settings.embedding_model,
+            api_key=settings.openai_compatible_api_key,
+            base_url=base_url,
+        )
+
     if provider == "openrouter":
         if not settings.openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY required for openrouter embedding provider")
@@ -94,5 +121,5 @@ def build_embeddings(settings: Settings):
 
     raise ValueError(
         f"Unknown EMBEDDING_PROVIDER: {provider}. "
-        f"Use: openai|google|huggingface|openrouter"
+        f"Use: openai|google|huggingface|openai_compatible|openrouter"
     )

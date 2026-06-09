@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "kg_documents"
 
     # LLM selection
-    llm_provider: str = "openai"   # openai | anthropic | google | openrouter | ollama
+    llm_provider: str = "openai"   # openai | anthropic | google | openrouter | openai_compatible | ollama
 
     # Provider keys
     openai_api_key: str = ""
@@ -24,13 +24,19 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     openrouter_api_key: str = ""
     openrouter_model: str = "openai/gpt-4o"
+    openai_compatible_api_key: str = ""
+    openai_compatible_base_url: str = ""
+    openai_compatible_model: str = ""
     ollama_base_url: str = "http://host.docker.internal:11434"
     ollama_model: str = "llama3.2"
 
     # Embeddings (independent from LLM provider)
-    embedding_provider: str = "openai"  # openai | google | huggingface
+    embedding_provider: str = "openai"  # openai | google | huggingface | openai_compatible
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
+
+    # Qdrant
+    qdrant_vector_size: int = 1024  # bge-m3=1024, text-embedding-3-small=1536, text-embedding-ada-002=1536
 
     # Ingestion
     chunk_size: int = 1000

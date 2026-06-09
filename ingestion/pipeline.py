@@ -83,7 +83,7 @@ class IngestionPipeline:
         if self.settings.qdrant_collection not in existing:
             self.qdrant_client.create_collection(
                 collection_name=self.settings.qdrant_collection,
-                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=self.settings.qdrant_vector_size, distance=Distance.COSINE),
             )
 
     def _load_pdf(self, file_path: Path) -> list:
