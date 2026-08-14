@@ -161,11 +161,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE: http://localhost:8000
-        VITE_INGEST_BASE: http://localhost:8001
-        VITE_MCP_BASE: http://localhost:8002
-        VITE_API_KEY: ${QUERY_API_KEY:-changeme}
+    environment:
+      API_KEY: ${QUERY_API_KEY:-changeme}
     container_name: kg_web
     restart: unless-stopped
     depends_on:
