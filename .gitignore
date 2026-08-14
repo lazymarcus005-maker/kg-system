@@ -1,2 +1,25 @@
+# secrets / local env
+.env
+*.env.local
+
+# python
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+
+# local tooling
+.claude/
+
+# document data (keep folder structure via .gitkeep)
+data/input/*
+data/processed/*
+!data/input/.gitkeep
+!data/processed/.gitkeep
+
+# web
+node_modules/
+dist/
+
+# misc
+.DS_Store
+*.log
