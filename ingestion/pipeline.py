@@ -80,11 +80,23 @@ class IngestionPipeline:
 
     def _ensure_qdrant_collection(self):
         existing = [c.name for c in self.qdrant_client.get_collections().collections]
-        if self.settings.qdrant_collection not in existing:
-            self.qdrant_client.create_collection(
-                collection_name=self.settings.qdrant_collection,
-                vectors_config=VectorParams(size=self.settings.qdrant_vector_size, distance=Distance.COSINE),
-            )
+        if self.settings.qdrant_collection in existing:
+            info = self.qdrant_client.get_collection(self.settings.qdrant_collection)
+            vectors = info.config.params.vectors
+            if isinstance(vectors, dict):
+                vectors = next(iter(vectors.values()))
+            if vectors.size != self.settings.qdrant_vector_size:
+                raise RuntimeError(
+                    f"[Pipeline] Qdrant collection '{self.settings.qdrant_collection}' has vector size "
+                    f"{vectors.size}, but EMBEDDING_MODEL produces {self.settings.qdrant_vector_size}-dim "
+                    "vectors (QDRANT_VECTOR_SIZE mismatch). Delete the qdrant volume "
+                    "(docker compose down -v) or set QDRANT_VECTOR_SIZE to match the embedding model."
+                )
+            return
+        self.qdrant_client.create_collection(
+            collection_name=self.settings.qdrant_collection,
+            vectors_config=VectorParams(size=self.settings.qdrant_vector_size, distance=Distance.COSINE),
+        )
 
     def _load_pdf(self, file_path: Path) -> list:
         """Try multiple loaders in order; fallback to tesseract OCR for scanned PDFs."""
@@ -204,8 +216,8 @@ class IngestionPipeline:
         index_queries = [
             "CREATE INDEX req_id IF NOT EXISTS FOR (r:Requirement) ON (r.id)",
             "CREATE INDEX clause_id IF NOT EXISTS FOR (c:Clause) ON (c.id)",
-            "CREATE INDEX component_name IF NOT EXISTS FOR (c:Component) ON (c.name)",
-            "CREATE INDEX standard_name IF NOT EXISTS FOR (s:Standard) ON (s.name)",
+            "CREATE INDEX component_id IF NOT EXISTS FOR (c:Component) ON (c.id)",
+            "CREATE INDEX standard_id IF NOT EXISTS FOR (s:Standard) ON (s.id)",
         ]
         for q in index_queries:
             try:

@@ -17,13 +17,28 @@ services:
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
-      - ./scripts/neo4j-init.cypher:/docker-entrypoint-initdb.d/init.cypher
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "changeme", "RETURN 1"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  # ── Neo4j Init (one-shot) ────────────────────────────────────────
+  neo4j-init:
+    image: neo4j:5.18-community
+    container_name: kg_neo4j_init
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: changeme
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/scripts/neo4j-init.sh"]
+    restart: "no"
 
   # ── Vector Store (RAG fallback) ──────────────────────────────────
   qdrant:
@@ -60,6 +75,7 @@ services:
       NEO4J_PASSWORD: changeme
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
       # LLM Provider
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
