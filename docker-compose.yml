@@ -35,7 +35,7 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: changeme
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
     volumes:
       - ./scripts:/scripts
     entrypoint: ["/scripts/neo4j-init.sh"]
@@ -96,7 +96,7 @@ services:
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
       EXTRACT_ENTITIES: ${EXTRACT_ENTITIES:-true}
-      API_KEY: ${QUERY_API_KEY:-changeme}
+      API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set in .env}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       INSECURE_DEV_MODE: ${INSECURE_DEV_MODE:-false}

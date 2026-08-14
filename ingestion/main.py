@@ -78,6 +78,33 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 jobs: dict[str, dict] = {}
 
 
+def sanitize_filename(name: str | None) -> str:
+    """Strip path components and reject anything that is not a plain PDF name."""
+    filename = Path(name or "").name
+    if not filename or not filename.endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported")
+    dest = INPUT_DIR / filename
+    if not dest.resolve().is_relative_to(INPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid filename")
+    return filename
+
+
+async def stream_to_disk(file, dest: Path, max_bytes: int) -> int:
+    """Stream an upload to disk in chunks, enforcing a size limit."""
+    written = 0
+    try:
+        with dest.open("wb") as f:
+            while chunk := await file.read(1024 * 1024):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(413, "File too large")
+                f.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
+    return written
+
+
 class IngestResponse(BaseModel):
     job_id: str
     filename: str
@@ -109,27 +136,11 @@ async def ingest_pdf(
     doc_type: str = "general",
 ):
     """Upload a PDF for ingestion into the Knowledge Graph."""
-    filename = Path(file.filename or "").name
-    if not filename or not filename.endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files are supported")
-
+    filename = sanitize_filename(file.filename)
     dest = INPUT_DIR / filename
-    if not dest.resolve().is_relative_to(INPUT_DIR.resolve()):
-        raise HTTPException(400, "Invalid filename")
-
     job_id = f"job_{os.urandom(4).hex()}"
     max_bytes = settings.max_upload_mb * 1024 * 1024
-    written = 0
-    try:
-        with dest.open("wb") as f:
-            while chunk := await file.read(1024 * 1024):
-                written += len(chunk)
-                if written > max_bytes:
-                    raise HTTPException(413, "File too large")
-                f.write(chunk)
-    except HTTPException:
-        dest.unlink(missing_ok=True)
-        raise
+    await stream_to_disk(file, dest, max_bytes)
 
     jobs[job_id] = {"status": "queued", "filename": filename}
     metadata = {"source": source, "doc_type": doc_type, "filename": filename}

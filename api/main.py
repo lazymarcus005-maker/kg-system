@@ -31,7 +31,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-rag = GraphRAG(settings)
+rag: GraphRAG | None = None
+
+
+def get_rag() -> GraphRAG:
+    global rag
+    if rag is None:
+        rag = GraphRAG(settings)
+    return rag
 
 # ── Auth ─────────────────────────────────────────────────────────────
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
@@ -64,6 +71,7 @@ class ChatRequest(BaseModel):
 # ── /v1/chat/completions (OpenAI-compatible) ─────────────────────────
 @app.post("/v1/chat/completions", dependencies=[Depends(verify_key)])
 async def chat_completions(req: ChatRequest):
+    rag = get_rag()
     user_message = next(
         (m.content for m in reversed(req.messages) if m.role == "user"), ""
     )
@@ -79,6 +87,7 @@ async def chat_completions(req: ChatRequest):
 
 
 async def _stream_response(question: str, history: list[Message]) -> AsyncIterator[str]:
+    rag = get_rag()
     answer, sources = await rag.query(question, history)
     chunk_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
 
@@ -172,6 +181,7 @@ class CypherRequest(BaseModel):
 @app.post("/query/cypher", dependencies=[Depends(verify_key)])
 async def query_cypher(req: CypherRequest):
     """Translate natural language to Cypher and return raw graph data."""
+    rag = get_rag()
     cypher, results = await rag.nl_to_cypher(req.question)
     return {"cypher": cypher, "results": results}
 
@@ -184,6 +194,7 @@ class RawCypherRequest(BaseModel):
 @app.post("/run/cypher", dependencies=[Depends(verify_key)])
 async def run_cypher(req: RawCypherRequest):
     """Execute a raw Cypher query directly (no NL translation)."""
+    rag = get_rag()
     try:
         assert_read_only_cypher(req.cypher)
     except ValueError:
@@ -205,6 +216,7 @@ class GraphRequest(BaseModel):
 @app.post("/query/graph", dependencies=[Depends(verify_key)])
 async def query_graph(req: GraphRequest):
     """Return neighborhood of a graph node up to given depth."""
+    rag = get_rag()
     try:
         result = await rag.get_neighborhood(req.node_type, req.node_id, req.depth)
     except ValueError as e:
@@ -215,7 +227,7 @@ async def query_graph(req: GraphRequest):
 # ── Health ────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    neo4j_ok = await rag.ping_neo4j()
+    neo4j_ok = await get_rag().ping_neo4j()
     return {"status": "ok", "neo4j": neo4j_ok, "provider": settings.llm_provider}
 
 
@@ -223,6 +235,7 @@ async def health():
 @app.get("/graph/stats", dependencies=[Depends(verify_key)])
 async def graph_stats():
     """Return aggregate graph statistics for Dashboard."""
+    rag = get_rag()
     node_count = rag.graph.query("MATCH (n) RETURN count(n) AS c")[0]["c"]
     rel_count = rag.graph.query("MATCH ()-[r]->() RETURN count(r) AS c")[0]["c"]
     doc_count = rag.graph.query("MATCH (n:Document) RETURN count(n) AS c")[0]["c"]
@@ -238,6 +251,7 @@ async def list_entities(
     limit: int = Query(50, ge=1, le=200),
 ):
     """List __Entity__ nodes with optional type/search filter, paginated."""
+    rag = get_rag()
     params: dict = {
         "type_filter": type,
         "search": search.lower() if search else None,
@@ -277,6 +291,7 @@ async def list_relations(
     limit: int = Query(20, ge=1, le=100),
 ):
     """List relations with optional status filter, paginated. Includes status counts."""
+    rag = get_rag()
     params: dict = {"status_filter": status, "skip": skip, "limit": limit}
     data_cypher = """
     MATCH (a:__Entity__)-[r]->(b:__Entity__)
@@ -312,6 +327,7 @@ class RelationStatusUpdate(BaseModel):
 @app.patch("/relations/{relation_id}", dependencies=[Depends(verify_key)])
 async def update_relation_status(relation_id: str, body: RelationStatusUpdate):
     """Approve or reject a relation by its Neo4j elementId."""
+    rag = get_rag()
     if body.status not in ("approved", "rejected"):
         raise HTTPException(400, "status must be 'approved' or 'rejected'")
     cypher = """
@@ -329,6 +345,7 @@ async def update_relation_status(relation_id: str, body: RelationStatusUpdate):
 @app.get("/ontology", dependencies=[Depends(verify_key)])
 async def get_ontology():
     """Return all node labels (excluding __Entity__) and relation types with counts."""
+    rag = get_rag()
     labels_cypher = """
     MATCH (n:__Entity__)
     UNWIND [l IN labels(n) WHERE l <> '__Entity__'] AS label
@@ -352,6 +369,7 @@ async def search_graph_nodes(
     limit: int = Query(20, ge=1, le=100),
 ):
     """Search entity nodes by name for Graph Explorer."""
+    rag = get_rag()
     cypher = """
     MATCH (n:__Entity__)
     WHERE toLower(coalesce(n.id, n.name, '')) CONTAINS toLower($search)
@@ -372,6 +390,7 @@ class CreateNodeRequest(BaseModel):
 @app.post("/graph/nodes", dependencies=[Depends(verify_key)], status_code=201)
 async def create_graph_node(body: CreateNodeRequest):
     """Create a new entity node in the knowledge graph."""
+    rag = get_rag()
     # Sanitise label — alphanumeric + underscore only to prevent Cypher injection
     import re
     safe_label = re.sub(r"[^A-Za-z0-9_]", "_", body.label.strip())
@@ -395,6 +414,7 @@ async def create_graph_node(body: CreateNodeRequest):
 @app.get("/graph/visualization", dependencies=[Depends(verify_key)])
 async def get_graph_visualization(limit: int = Query(100, ge=10, le=500)):
     """Get graph nodes and edges for visualization (limited to prevent browser overload)."""
+    rag = get_rag()
     # Fetch limited nodes and their direct relationships
     cypher = """
     MATCH (n:__Entity__)
