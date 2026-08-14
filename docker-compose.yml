@@ -9,7 +9,8 @@ services:
       - "7474:7474"   # Browser UI
       - "7687:7687"   # Bolt protocol
     environment:
-      NEO4J_AUTH: neo4j/changeme
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
       NEO4J_dbms_memory_heap_initial__size: 256m
@@ -19,7 +20,7 @@ services:
       - neo4j_logs:/logs
       - ./scripts/neo4j-init.cypher:/docker-entrypoint-initdb.d/init.cypher
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "changeme", "RETURN 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p $${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -57,7 +58,7 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: changeme
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       # LLM Provider
@@ -100,7 +101,7 @@ services:
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: changeme
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       # LLM Provider
@@ -118,7 +119,7 @@ services:
       # Embedding Provider
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
-      API_KEY: ${QUERY_API_KEY:-changeme}
+      API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set in .env}
     ports:
       - "8000:8000"   # Main API (OpenAI-compatible)
 
@@ -133,7 +134,7 @@ services:
       - query-api
     environment:
       QUERY_API_URL: http://query-api:8000
-      API_KEY: ${QUERY_API_KEY:-changeme}
+      API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set in .env}
     ports:
       - "8002:8002"   # MCP SSE endpoint
 
@@ -146,7 +147,7 @@ services:
         VITE_API_BASE: http://localhost:8000
         VITE_INGEST_BASE: http://localhost:8001
         VITE_MCP_BASE: http://localhost:8002
-        VITE_API_KEY: ${QUERY_API_KEY:-changeme}
+        VITE_API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set in .env}
     container_name: kg_web
     restart: unless-stopped
     depends_on:
