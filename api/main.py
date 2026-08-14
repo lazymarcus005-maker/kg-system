@@ -15,9 +15,9 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from graph_rag import GraphRAG
+from graph_rag import GraphRAG, assert_read_only_cypher
 from config import Settings
 
 settings = Settings()
@@ -25,7 +25,7 @@ app = FastAPI(title="KG Query API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,8 +38,10 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 async def verify_key(auth: str | None = Depends(api_key_header)):
-    if settings.api_key == "changeme":
-        return   # dev mode: skip auth
+    if settings.api_key in ("", "changeme"):
+        if settings.insecure_dev_mode:
+            return
+        raise HTTPException(403, "API key not configured: set QUERY_API_KEY (or INSECURE_DEV_MODE=1 for local dev)")
     token = (auth or "").removeprefix("Bearer ").strip()
     if token != settings.api_key:
         raise HTTPException(401, "Invalid API key")
@@ -183,6 +185,10 @@ class RawCypherRequest(BaseModel):
 async def run_cypher(req: RawCypherRequest):
     """Execute a raw Cypher query directly (no NL translation)."""
     try:
+        assert_read_only_cypher(req.cypher)
+    except ValueError:
+        raise HTTPException(403, "Only read-only Cypher is allowed")
+    try:
         results = rag.graph.query(req.cypher)
     except Exception as e:
         raise HTTPException(400, str(e))
@@ -193,13 +199,16 @@ async def run_cypher(req: RawCypherRequest):
 class GraphRequest(BaseModel):
     node_type: str
     node_id: str
-    depth: int = 2
+    depth: int = Field(2, ge=1, le=5)
 
 
 @app.post("/query/graph", dependencies=[Depends(verify_key)])
 async def query_graph(req: GraphRequest):
     """Return neighborhood of a graph node up to given depth."""
-    result = await rag.get_neighborhood(req.node_type, req.node_id, req.depth)
+    try:
+        result = await rag.get_neighborhood(req.node_type, req.node_id, req.depth)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return result
 
 

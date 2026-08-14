@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // In dev: Vite proxy rewrites /ingest-api/* → http://localhost:8001/*
-// In Docker prod: VITE_INGEST_BASE is injected at build time
+// In Docker prod: the web server proxies /ingest-api/* and attaches the API key
 const baseURL = (import.meta.env.VITE_INGEST_BASE as string | undefined) ?? '/ingest-api'
 
 const ingestionApi = axios.create({

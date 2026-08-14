@@ -22,10 +22,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/ingest-api/, ''),
       },
-      '/mcp-api': {
+      '/mcp': {
         target: process.env.VITE_MCP_URL || 'http://localhost:8002',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/mcp-api/, ''),
+        rewrite: (path) => path.replace(/^\/mcp/, ''),
       },
     },
   },
