@@ -95,6 +95,10 @@ services:
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
       EXTRACT_ENTITIES: ${EXTRACT_ENTITIES:-true}
+      API_KEY: ${QUERY_API_KEY:-changeme}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INSECURE_DEV_MODE: ${INSECURE_DEV_MODE:-false}
     volumes:
       - ./data/input:/app/input          # drop PDFs here
       - ./data/processed:/app/processed
