@@ -17,13 +17,28 @@ services:
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
-      - ./scripts/neo4j-init.cypher:/docker-entrypoint-initdb.d/init.cypher
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "changeme", "RETURN 1"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  # ── Neo4j Init (one-shot) ────────────────────────────────────────
+  neo4j-init:
+    image: neo4j:5.18-community
+    container_name: kg_neo4j_init
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: changeme
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/scripts/neo4j-init.sh"]
+    restart: "no"
 
   # ── Vector Store (RAG fallback) ──────────────────────────────────
   qdrant:
@@ -60,6 +75,7 @@ services:
       NEO4J_PASSWORD: changeme
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
       # LLM Provider
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -123,6 +139,8 @@ services:
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       API_KEY: ${QUERY_API_KEY:-changeme}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INSECURE_DEV_MODE: ${INSECURE_DEV_MODE:-false}
     ports:
       - "8000:8000"   # Main API (OpenAI-compatible)
 
@@ -138,6 +156,7 @@ services:
     environment:
       QUERY_API_URL: http://query-api:8000
       API_KEY: ${QUERY_API_KEY:-changeme}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
       - "8002:8002"   # MCP SSE endpoint
 
@@ -146,11 +165,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE: http://localhost:8000
-        VITE_INGEST_BASE: http://localhost:8001
-        VITE_MCP_BASE: http://localhost:8002
-        VITE_API_KEY: ${QUERY_API_KEY:-changeme}
+    environment:
+      API_KEY: ${QUERY_API_KEY:-changeme}
     container_name: kg_web
     restart: unless-stopped
     depends_on:
