@@ -6,6 +6,7 @@ Strategy:
   3. Fallback to vector search (Qdrant) if graph returns nothing
   4. Feed context + question to LLM → cited answer
 """
+import re
 import time
 from langchain_neo4j import Neo4jGraph, GraphCypherQAChain
 from langchain_qdrant import QdrantVectorStore
@@ -70,6 +71,22 @@ Instructions:
 Answer:
 """,
 )
+
+
+ALLOWED_NODE_TYPES = {
+    "Standard", "Clause", "Requirement", "Control", "Component", "TestCase",
+    "Evidence", "Role", "Process", "Artifact", "Constraint", "__Entity__", "Document",
+}
+
+
+def assert_read_only_cypher(cypher: str) -> None:
+    """Raise ValueError if the query contains write/destructive Cypher constructs."""
+    blocked = ("CREATE", "MERGE", "SET", "DELETE", "DETACH", "REMOVE", "DROP", "LOAD", "FOREACH", "CALL")
+    for kw in blocked:
+        if re.search(rf"\b{kw}\b", cypher, flags=re.IGNORECASE):
+            raise ValueError(f"Forbidden Cypher construct: {kw}")
+    if re.search(r";\s*\S", cypher):
+        raise ValueError("Multiple Cypher statements are not allowed")
 
 
 class GraphRAG:
@@ -185,6 +202,10 @@ class GraphRAG:
         cypher_response = await loop.run_in_executor(None, _run_llm)
         cypher = self._strip_cypher_fence(cypher_response.content)
         try:
+            assert_read_only_cypher(cypher)
+        except ValueError:
+            return cypher, [{"error": "Only read-only Cypher queries are allowed"}]
+        try:
             results = self.graph.query(cypher)
         except Exception as e:
             results = [{"error": str(e)}]
@@ -192,6 +213,13 @@ class GraphRAG:
 
     async def get_neighborhood(self, node_type: str, node_id: str, depth: int = 2) -> dict:
         """Return graph neighborhood of a specific node."""
+        if node_type not in ALLOWED_NODE_TYPES:
+            raise ValueError("Invalid node_type")
+        try:
+            depth = int(depth)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid depth")
+        depth = max(1, min(5, depth))
         cypher = f"""
         MATCH path = (n:{node_type})-[*1..{depth}]-(neighbor)
         WHERE n.id = $node_id OR n.name = $node_id
