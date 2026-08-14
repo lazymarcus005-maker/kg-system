@@ -46,3 +46,6 @@ class Settings(BaseSettings):
     # API
     api_key: str = "changeme"
     query_api_url: str = "http://query-api:8000"
+    max_upload_mb: int = 50
+    cors_origins: str = "http://localhost:5173"
+    insecure_dev_mode: bool = False
