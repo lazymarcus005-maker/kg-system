@@ -1,8 +1,8 @@
 import axios from 'axios'
 
-// In dev: Vite proxy rewrites /mcp-api/* → http://localhost:8002/*
-// In Docker prod: VITE_MCP_BASE is injected at build time
-const baseURL = (import.meta.env.VITE_MCP_BASE as string | undefined) ?? '/mcp-api'
+// In dev: Vite proxy rewrites /mcp/* → http://localhost:8002/*
+// In Docker prod: the web server proxies /mcp/* and attaches the API key
+const baseURL = (import.meta.env.VITE_MCP_BASE as string | undefined) ?? '/mcp'
 
 const mcpApi = axios.create({
   baseURL,
