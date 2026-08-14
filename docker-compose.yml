@@ -119,6 +119,8 @@ services:
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       API_KEY: ${QUERY_API_KEY:-changeme}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INSECURE_DEV_MODE: ${INSECURE_DEV_MODE:-false}
     ports:
       - "8000:8000"   # Main API (OpenAI-compatible)
 
@@ -134,6 +136,7 @@ services:
     environment:
       QUERY_API_URL: http://query-api:8000
       API_KEY: ${QUERY_API_KEY:-changeme}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
       - "8002:8002"   # MCP SSE endpoint
 

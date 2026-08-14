@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     query_api_url: str = "http://query-api:8000"
     api_key: str = "changeme"
+    cors_origins: str = "http://localhost:5173"
 
 
 settings = Settings()
@@ -25,7 +26,7 @@ app = FastAPI(title="KG MCP Server", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

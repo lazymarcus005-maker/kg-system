@@ -25,7 +25,7 @@ app = FastAPI(title="KG Query API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,8 +38,10 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 async def verify_key(auth: str | None = Depends(api_key_header)):
-    if settings.api_key == "changeme":
-        return   # dev mode: skip auth
+    if settings.api_key in ("", "changeme"):
+        if settings.insecure_dev_mode:
+            return
+        raise HTTPException(403, "API key not configured: set QUERY_API_KEY (or INSECURE_DEV_MODE=1 for local dev)")
     token = (auth or "").removeprefix("Bearer ").strip()
     if token != settings.api_key:
         raise HTTPException(401, "Invalid API key")
