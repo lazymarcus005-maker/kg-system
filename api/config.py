@@ -35,4 +35,6 @@ class Settings(BaseSettings):
     extract_entities: bool = True
 
     api_key: str = "changeme"
+    cors_origins: str = "http://localhost:5173"
+    insecure_dev_mode: bool = False
     query_api_url: str = "http://query-api:8000"

@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1536
 
     # Qdrant
-    qdrant_vector_size: int = 1024  # bge-m3=1024, text-embedding-3-small=1536, text-embedding-ada-002=1536
+    qdrant_vector_size: int = 1536  # must match EMBEDDING_MODEL (1536 for text-embedding-3-small); bge-m3=1024, text-embedding-ada-002=1536
 
     # Ingestion
     chunk_size: int = 1000
