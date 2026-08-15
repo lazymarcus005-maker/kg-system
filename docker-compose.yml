@@ -6,11 +6,13 @@ services:
     container_name: kg_neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"   # Browser UI
-      - "7687:7687"   # Bolt protocol
+      - "${NEO4J_HTTP_PORT:-7474}:7474"   # Browser UI
+      - "${NEO4J_BOLT_PORT:-7687}:7687"   # Bolt protocol
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
+      # NB: must NOT be named NEO4J_PASSWORD — the neo4j image treats any
+      # NEO4J_* env var as a config setting and would reject "PASSWORD".
+      KG_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
       NEO4J_dbms_memory_heap_initial__size: 256m
@@ -19,7 +21,7 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p $${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p $${KG_NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -47,8 +49,8 @@ services:
     container_name: kg_qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"
-      - "6334:6334"   # gRPC
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"   # gRPC
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -104,7 +106,7 @@ services:
       - ./data/input:/app/input          # drop PDFs here
       - ./data/processed:/app/processed
     ports:
-      - "8001:8001"   # Ingestion API
+      - "${INGESTION_PORT:-8001}:8001"   # Ingestion API
 
   # ── Query / GraphRAG API ─────────────────────────────────────────
   query-api:
@@ -143,7 +145,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       INSECURE_DEV_MODE: ${INSECURE_DEV_MODE:-false}
     ports:
-      - "8000:8000"   # Main API (OpenAI-compatible)
+      - "${QUERY_API_PORT:-8000}:8000"   # Main API (OpenAI-compatible)
 
   # ── MCP Server (for Claude Code / AI harness) ───────────────────
   mcp-server:
@@ -159,7 +161,7 @@ services:
       API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
-      - "8002:8002"   # MCP SSE endpoint
+      - "${MCP_PORT:-8002}:8002"   # MCP SSE endpoint
 
   # ── Web Control Panel ────────────────────────────────────────────
   web:
@@ -173,7 +175,7 @@ services:
     depends_on:
       - query-api
     ports:
-      - "5173:5173"   # Web UI
+      - "${WEB_PORT:-5173}:5173"   # Web UI
 
 volumes:
   neo4j_data:

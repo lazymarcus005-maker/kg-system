@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir pytest httpx
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["pytest", "tests/e2e", "-v", "--tb=short"]
