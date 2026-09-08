@@ -1,0 +1,20 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run end-to-end suite
+        run: ./scripts/run_e2e.sh
+        env:
+          NEO4J_PASSWORD: ci_neo4j_secret
+          QUERY_API_KEY: ci_api_key

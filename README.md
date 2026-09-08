@@ -171,6 +171,24 @@ curl -X POST $BASE/query/graph \
   -d '{"node_type":"Component","node_id":"AuthService","depth":2}'
 ```
 
+## End-to-end tests
+
+A fully offline e2e suite boots the entire stack (Neo4j, Qdrant, ingestion,
+query-api, MCP, web) against a **mock LLM**, so no external API keys are
+required:
+
+```
+./scripts/run_e2e.sh
+```
+
+It covers the auth wall, PDF → Qdrant ingestion, GraphRAG chat, the read-only
+Cypher guard, seed data, MCP tool calls, and the web UI, then tears everything
+down. Published host ports are configurable (`QUERY_API_PORT`, `NEO4J_HTTP_PORT`,
+...) in case the defaults collide with local services.
+
+To exercise the full LLM entity-extraction path instead of the mock, set
+`EXTRACT_ENTITIES=true` and a real `LLM_PROVIDER` in an override before running.
+
 ## Project Structure
 
 ```
@@ -190,6 +208,13 @@ kg-system/
 │   ├── graph_rag.py    ← GraphRAG core
 │   ├── mcp_server.py   ← MCP server for Claude Code
 │   └── config.py
+├── web/                ← React control panel
+├── tests/
+│   ├── api/            ← query API unit tests
+│   ├── ingestion/      ← ingestion unit tests
+│   └── e2e/            ← offline end-to-end suite (mock LLM)
 └── scripts/
-    └── neo4j-init.cypher ← schema + seed data
+    ├── neo4j-init.cypher ← schema + seed data
+    ├── neo4j-init.sh     ← applies the init script
+    └── run_e2e.sh        ← e2e runner
 ```

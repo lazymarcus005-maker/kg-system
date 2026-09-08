@@ -1,0 +1,75 @@
+# E2E override — use with:
+#   docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml ...
+#
+# Points the stack at an offline mock LLM so the whole pipeline runs
+# deterministically with no external API keys.
+
+services:
+  mock-llm:
+    build:
+      context: ./tests/e2e/mock_llm
+      dockerfile: Dockerfile
+    container_name: kg_mock_llm
+    restart: unless-stopped
+    environment:
+      MOCK_EMBED_DIM: "1536"
+    ports:
+      - "9999:9999"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:9999/health')\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  ingestion:
+    environment:
+      LLM_PROVIDER: openai_compatible
+      OPENAI_COMPATIBLE_API_KEY: mock-key
+      OPENAI_COMPATIBLE_BASE_URL: http://mock-llm:9999/v1
+      OPENAI_COMPATIBLE_MODEL: mock-model
+      EMBEDDING_PROVIDER: openai_compatible
+      EMBEDDING_MODEL: mock-embed
+      # Deterministic e2e: skip LLM entity extraction (vectors still stored).
+      # Set to "true" and provide a real LLM to test full graph extraction.
+      EXTRACT_ENTITIES: "false"
+      INSECURE_DEV_MODE: "false"
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+
+  query-api:
+    environment:
+      LLM_PROVIDER: openai_compatible
+      OPENAI_COMPATIBLE_API_KEY: mock-key
+      OPENAI_COMPATIBLE_BASE_URL: http://mock-llm:9999/v1
+      OPENAI_COMPATIBLE_MODEL: mock-model
+      EMBEDDING_PROVIDER: openai_compatible
+      EMBEDDING_MODEL: mock-embed
+      INSECURE_DEV_MODE: "false"
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+
+  e2e-tests:
+    build:
+      context: ./tests/e2e
+      dockerfile: Dockerfile.tests
+    container_name: kg_e2e_tests
+    environment:
+      QUERY_API_URL: http://query-api:8000
+      INGESTION_API_URL: http://ingestion:8001
+      MCP_API_URL: http://mcp-server:8002
+      WEB_URL: http://web:5173
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set}
+      QUERY_API_KEY: ${QUERY_API_KEY:?QUERY_API_KEY must be set}
+    volumes:
+      - ./tests/e2e:/app/tests/e2e
+    depends_on:
+      - neo4j-init
+      - query-api
+      - ingestion
+      - mcp-server
+      - web
+    command: ["pytest", "tests/e2e", "-v", "--tb=short"]
